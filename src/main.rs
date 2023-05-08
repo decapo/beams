@@ -1,7 +1,6 @@
 use csv::Reader;
 use nalgebra::geometry::{Point3, Rotation3};
 use nannou::prelude::*;
-use nannou_egui::{self, egui, Egui};
 use rand::Rng;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -10,9 +9,9 @@ const WINDOW_SIZE: u32 = 1200;
 const SCALE: f32 = 0.3;
 const SPHERE_SIZE: f32 = WINDOW_SIZE as f32 * SCALE;
 const N_BORBS: usize = 150;
-const BORB_SPEED: f32 = 0.02;
+const BORB_SPEED: f32 = 0.01;
 const BREAK_COUNT: usize = 10;
-const PITCH_SPEED: f32 = 0.02;
+const PITCH_SPEED: f32 = 0.01;
 
 struct Node {
     pos: Point3<f32>,
@@ -20,7 +19,6 @@ struct Node {
 
 impl Node {
     fn fade(&self) -> f32 {
-        //(self.pos.z+SPHERE_SIZE/2.0)/(SPHERE_SIZE)
         0.5 + (self.pos.z - WINDOW_SIZE as f32 / 2.0) / (WINDOW_SIZE as f32)
     }
 }
@@ -43,26 +41,27 @@ struct Borb {
 }
 
 impl Borb {
-    fn spawn_random(nodes: &Vec<Node>, neighbors: &Vec<Vec<usize>>) -> Self {
-        let src = rand::thread_rng().gen_range(0, nodes.len());
+    fn spawn_random(nodes: &Vec<Node>, neighbors: &[Vec<usize>]) -> Self {
+        let src = rand::thread_rng().gen_range(0..nodes.len());
         let options = &neighbors[src];
-        let index: usize = rand::thread_rng().gen_range(0, options.len());
+        let index: usize = rand::thread_rng().gen_range(0..options.len());
         let dest = options[index];
 
         Self {
             pos: nodes[src].pos,
             dest_pos: nodes[dest].pos,
-            src: src,
-            dest: dest,
+            src,
+            dest,
             progress: 0.0,
             color: (1.0, 0.1, 0.1),
         }
     }
-    fn hop(&mut self, nodes: &Vec<Node>, options: &Vec<Vec<usize>>) {
-        if options[self.dest].len() > 0 {
+
+    fn hop(&mut self, nodes: &[Node], options: &[Vec<usize>]) {
+        if !options[self.dest].is_empty() {
             self.src = self.dest;
             self.pos = self.dest_pos;
-            let index = rand::thread_rng().gen_range(0, options[self.dest].len());
+            let index = rand::thread_rng().gen_range(0..options[self.dest].len());
             let dest = options[self.dest][index];
             self.dest = dest;
             self.dest_pos = nodes[dest].pos;
@@ -130,23 +129,21 @@ impl Model {
 }
 
 fn model(app: &App) -> Model {
-    let window_id = app
+    let _window_id = app
         .new_window()
         .size(WINDOW_SIZE, WINDOW_SIZE)
         .view(view)
         .build()
         .unwrap();
 
-    let pos_f: String = String::from("beams/graphs/50_node/graph_positions.csv");
-    let edge_f: String = String::from("beams/graphs/50_node/graph_edges.csv");
+    let pos_f: String = String::from("graphs/50_node/graph_positions.csv");
+    let edge_f: String = String::from("graphs/50_node/graph_edges.csv");
     let (nodes, edges) = read_graph(pos_f, edge_f);
 
-    let window = app.window(window_id).unwrap();
-    let egui = Egui::from_window(&window);
     Model::new(nodes, edges)
 }
 
-fn update(_app: &App, model: &mut Model, _update: Update) {
+fn update(app: &App, model: &mut Model, _update: Update) {
     let Model {
         ref mut nodes,
         ref mut edges,
@@ -174,7 +171,7 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
             neighbors[dest].remove(pos);
         }
 
-        let new_dest = rand::thread_rng().gen_range(0, num_nodes);
+        let new_dest = rand::thread_rng().gen_range(0..num_nodes);
         let new_edge: Edge = Edge {
             src,
             dest: new_dest,
@@ -183,7 +180,7 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
         };
         edges.insert((src, new_dest), new_edge);
         neighbors[src].push(new_dest);
-        let new_dest = rand::thread_rng().gen_range(0, num_nodes);
+        let new_dest = rand::thread_rng().gen_range(0..num_nodes);
         let new_edge: Edge = Edge {
             src: dest,
             dest: new_dest,
@@ -195,8 +192,11 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
         edges.remove(&(src, dest));
     }
 
+    let is_mouse_pressed = app.mouse.buttons.left().is_down();
+    let rotation_speed = if is_mouse_pressed { 0.04 } else { PITCH_SPEED };
+
     let r: Rotation3<f32> =
-        Rotation3::from_euler_angles(angles.roll, angles.pitch + PITCH_SPEED, angles.yaw);
+        Rotation3::from_euler_angles(angles.roll, angles.pitch + rotation_speed, angles.yaw);
 
     for n in nodes.iter_mut() {
         n.pos = r * n.pos;
@@ -224,7 +224,7 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
 fn view(app: &App, model: &Model, frame: Frame) {
     let draw = app.draw();
     draw.background().rgba(0.0, 0.0, 0.0, 0.75);
-    draw_model(&draw, &model);
+    draw_model(&draw, model);
     draw.to_frame(app, &frame).unwrap();
 }
 
@@ -240,7 +240,7 @@ fn draw_model(draw: &Draw, model: &Model) {
             draw.line()
                 .start(vec2(n1.pos.x, n1.pos.y))
                 .end(vec2(n2.pos.x, n2.pos.y))
-                .weight(3.0)
+                .weight(7.0)
                 .rgba(rc, 0.5 - rc, 0.5 - rc, fade);
         }
     }
@@ -255,7 +255,6 @@ fn draw_model(draw: &Draw, model: &Model) {
 
 #[derive(Debug, Deserialize)]
 struct NodeReader {
-    id: usize,
     x: f32,
     y: f32,
     z: f32,
