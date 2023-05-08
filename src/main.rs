@@ -293,6 +293,8 @@ fn mouse_moved(_app: &App, model: &mut Model, position: Point2) {
         let delta_y = -(position.y - model.last_mouse_position.y) * MOUSE_SENSITIVITY;
         model.delta_angles = (delta_y, delta_x);
         model.last_mouse_position = position;
+    } else {
+        model.last_mouse_position = position;
     }
 }
 
