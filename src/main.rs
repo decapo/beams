@@ -6,7 +6,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 
 const WINDOW_SIZE: u32 = 1200;
-const SCALE: f32 = 0.3;
+const SCALE: f32 = 0.25;
 const SPHERE_SIZE: f32 = WINDOW_SIZE as f32 * SCALE;
 const N_BORBS: usize = 150;
 const BORB_SPEED: f32 = 0.01;
@@ -198,7 +198,15 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
             b.dest_pos = r * b.dest_pos;
         }
     } else {
-        model.delta_angles = (0.0, 0.0);
+        let r: Rotation3<f32> = Rotation3::from_euler_angles(0.0, 0.005, 0.0);
+
+        for n in nodes.iter_mut() {
+            n.pos = r * n.pos;
+        }
+        for b in borbs.iter_mut() {
+            b.pos = r * b.pos;
+            b.dest_pos = r * b.dest_pos;
+        }
     }
 
     // Step Objects
@@ -236,7 +244,7 @@ fn draw_model(draw: &Draw, model: &Model) {
                 .start(vec2(n1.pos.x, n1.pos.y))
                 .end(vec2(n2.pos.x, n2.pos.y))
                 .weight(7.0)
-                .rgba(rc, 0.5 - rc, 0.5 - rc, fade);
+                .rgba(rc, 0.75 - rc, 0.75 - rc, fade);
         }
     }
 
