@@ -11,7 +11,7 @@ const SPHERE_SIZE: f32 = WINDOW_SIZE as f32 * SCALE;
 const N_BORBS: usize = 150;
 const BORB_SPEED: f32 = 0.01;
 const BREAK_COUNT: usize = 10;
-const PITCH_SPEED: f32 = 0.01;
+const MOUSE_SENSITIVITY: f32 = 0.01;
 
 struct Node {
     pos: Point3<f32>,
@@ -87,26 +87,18 @@ fn main() {
     nannou::app(model).update(update).run();
 }
 
-struct Angles {
-    roll: f32,
-    pitch: f32,
-    yaw: f32,
-}
 struct Model {
     nodes: Vec<Node>,
     edges: HashMap<(usize, usize), Edge>,
     borbs: Vec<Borb>,
-    angles: Angles,
     neighbors: Vec<Vec<usize>>,
+    delta_angles: (f32, f32),
+    mouse_dragging: bool,
+    last_mouse_position: Point2,
 }
 
 impl Model {
     fn new(nodes: Vec<Node>, edges: HashMap<(usize, usize), Edge>) -> Self {
-        let angles = Angles {
-            roll: 0.0,
-            pitch: 0.0,
-            yaw: 0.0,
-        };
         let mut neighbors: Vec<Vec<usize>> = vec![Vec::<usize>::new(); nodes.len()];
         for ((src, dest), _) in edges.iter() {
             neighbors[*src].push(*dest);
@@ -122,8 +114,10 @@ impl Model {
             nodes,
             edges,
             borbs,
-            angles,
             neighbors,
+            delta_angles: (0.0, 0.0),
+            mouse_dragging: false,
+            last_mouse_position: Point2::new(0.0, 0.0),
         }
     }
 }
@@ -133,6 +127,9 @@ fn model(app: &App) -> Model {
         .new_window()
         .size(WINDOW_SIZE, WINDOW_SIZE)
         .view(view)
+        .mouse_moved(mouse_moved)
+        .mouse_pressed(mouse_pressed)
+        .mouse_released(mouse_released)
         .build()
         .unwrap();
 
@@ -143,12 +140,11 @@ fn model(app: &App) -> Model {
     Model::new(nodes, edges)
 }
 
-fn update(app: &App, model: &mut Model, _update: Update) {
+fn update(_app: &App, model: &mut Model, _update: Update) {
     let Model {
         ref mut nodes,
         ref mut edges,
         ref mut borbs,
-        ref mut angles,
         ref mut neighbors,
         ..
     } = *model;
@@ -192,18 +188,17 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         edges.remove(&(src, dest));
     }
 
-    let is_mouse_pressed = app.mouse.buttons.left().is_down();
-    let rotation_speed = if is_mouse_pressed { 0.04 } else { PITCH_SPEED };
-
-    let r: Rotation3<f32> =
-        Rotation3::from_euler_angles(angles.roll, angles.pitch + rotation_speed, angles.yaw);
-
-    for n in nodes.iter_mut() {
-        n.pos = r * n.pos;
-    }
-    for b in borbs.iter_mut() {
-        b.pos = r * b.pos;
-        b.dest_pos = r * b.dest_pos;
+    if model.mouse_dragging {
+        let r = Rotation3::from_euler_angles(model.delta_angles.0, model.delta_angles.1, 0.0);
+        for n in model.nodes.iter_mut() {
+            n.pos = r * n.pos;
+        }
+        for b in borbs.iter_mut() {
+            b.pos = r * b.pos;
+            b.dest_pos = r * b.dest_pos;
+        }
+    } else {
+        model.delta_angles = (0.0, 0.0);
     }
 
     // Step Objects
@@ -290,4 +285,21 @@ fn read_graph(pos_file: String, edge_file: String) -> (Vec<Node>, HashMap<(usize
     }
 
     (nodes, edges)
+}
+
+fn mouse_moved(_app: &App, model: &mut Model, position: Point2) {
+    if model.mouse_dragging {
+        let delta_x = (position.x - model.last_mouse_position.x) * MOUSE_SENSITIVITY;
+        let delta_y = -(position.y - model.last_mouse_position.y) * MOUSE_SENSITIVITY;
+        model.delta_angles = (delta_y, delta_x);
+        model.last_mouse_position = position;
+    }
+}
+
+fn mouse_pressed(_app: &App, model: &mut Model, _button: MouseButton) {
+    model.mouse_dragging = true;
+}
+
+fn mouse_released(_app: &App, model: &mut Model, _button: MouseButton) {
+    model.mouse_dragging = false;
 }
