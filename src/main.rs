@@ -4,13 +4,14 @@ use nannou::prelude::*;
 use rand::Rng;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 const WINDOW_SIZE: u32 = 1200;
 const SCALE: f32 = 0.25;
 const SPHERE_SIZE: f32 = WINDOW_SIZE as f32 * SCALE;
 const N_BORBS: usize = 150;
 const BORB_SPEED: f32 = 0.01;
-const BREAK_COUNT: usize = 10;
+const BREAK_COUNT: usize = 5;
 const MOUSE_SENSITIVITY: f32 = 0.01;
 
 struct Node {
@@ -41,7 +42,7 @@ struct Borb {
 }
 
 impl Borb {
-    fn spawn_random(nodes: &Vec<Node>, neighbors: &[Vec<usize>]) -> Self {
+    fn spawn_random(nodes: &[Node], neighbors: &[Vec<usize>]) -> Self {
         let src = rand::thread_rng().gen_range(0..nodes.len());
         let options = &neighbors[src];
         let index: usize = rand::thread_rng().gen_range(0..options.len());
@@ -133,9 +134,9 @@ fn model(app: &App) -> Model {
         .build()
         .unwrap();
 
-    let pos_f: String = String::from("graphs/50_node/graph_positions.csv");
-    let edge_f: String = String::from("graphs/50_node/graph_edges.csv");
-    let (nodes, edges) = read_graph(pos_f, edge_f);
+    let pos_f = PathBuf::from("graphs/50_node/graph_positions.csv");
+    let edge_f = PathBuf::from("graphs/50_node/graph_edges.csv");
+    let (nodes, edges) = read_graph(&pos_f, &edge_f);
 
     Model::new(nodes, edges)
 }
@@ -151,7 +152,7 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
 
     // Rotating points
 
-    let mut broken_edges: Vec<(usize, usize)> = Vec::new();
+    let mut broken_edges: Vec<(usize, usize)> = Vec::with_capacity(edges.len());
     for (key, edge) in edges.iter() {
         if edge.hop_count >= BREAK_COUNT {
             broken_edges.push(*key);
@@ -269,7 +270,10 @@ struct EdgeReader {
     dest: usize,
 }
 
-fn read_graph(pos_file: String, edge_file: String) -> (Vec<Node>, HashMap<(usize, usize), Edge>) {
+fn read_graph(
+    pos_file: &PathBuf,
+    edge_file: &PathBuf,
+) -> (Vec<Node>, HashMap<(usize, usize), Edge>) {
     let mut nodes: Vec<Node> = Vec::new();
     let mut edges: HashMap<(usize, usize), Edge> = HashMap::new();
     let mut rdr = Reader::from_path(pos_file).unwrap();
